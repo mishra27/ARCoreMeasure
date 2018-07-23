@@ -19,18 +19,87 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+
     <FrameLayout
         android:id="@+id/fl_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@+id/tv_result_label"
-        />
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true" />
 
     <android.opengl.GLSurfaceView
         android:id="@+id/surfaceview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="top"/>
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_gravity="top" />
+
+    <TextView
+        android:id="@+id/click"
+        android:layout_width="100dp"
+        android:layout_height="wrap_content"
+
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="202dp"
+        android:paddingBottom="24dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingTop="2dp"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
+
+    <TextureView
+        android:id="@+id/textureView"
+        android:layout_width="wrap_content"
+        android:layout_height="306dp"
+        android:layout_alignParentStart="true"
+        android:layout_below="@+id/surfaceview"
+        android:layout_gravity="bottom"
+        android:visibility="visible" />
+
+    <ImageButton
+        android:id="@+id/videoOnlineImageButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_below="@+id/surfaceview"
+        android:contentDescription="Video Record Button"
+        android:src="@mipmap/btn_video_online" />
+
+    <ImageButton
+        android:id="@+id/cameraImageButton2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_below="@+id/surfaceview"
+        android:layout_marginStart="32dp"
+        android:contentDescription="Camera Record Button"
+        android:src="@mipmap/btn_camera" />
+
+    <ToggleButton
+        android:id="@+id/toggle"
+        android:layout_width="53dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:src="@mipmap/btn_video_online"
+
+        android:text="Start"
+        android:visibility="gone" />
+
+    <ToggleButton
+        android:id="@+id/toggle2"
+        android:layout_width="53dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:src="@mipmap/btn_video_online"
+
+        android:text="Start"
+        android:visibility="gone" />
+
 
     <!-- for test -->
     <!--<com.hl3hl3.arcoremeasure.OverlayView-->
@@ -56,19 +125,79 @@
         android:paddingTop="16dp"
         android:text="RESULT"
         android:textColor="#ffffff"
-        android:textSize="14sp" />
+        android:textSize="14sp"
+        android:visibility="gone" />
 
+
+    <TextView
+        android:id="@+id/value_pitch"
+        android:layout_width="100dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+
+        android:paddingBottom="24dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingTop="2dp"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/value_roll"
+        android:layout_width="100dp"
+        android:layout_height="wrap_content"
+
+        android:layout_above="@+id/value_pitch"
+        android:layout_alignParentEnd="true"
+        android:paddingBottom="24dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingTop="2dp"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/value_roll7"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+
+        android:layout_alignParentBottom="true"
+        android:layout_alignStart="@+id/value_roll8"
+        android:paddingBottom="24dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingTop="2dp"
+        android:text="Up-Down"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/value_roll8"
+        android:layout_width="wrap_content"
+
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/value_pitch"
+        android:layout_toStartOf="@+id/value_pitch"
+        android:paddingBottom="24dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingTop="2dp"
+        android:text="Right-Left"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
 
     <TextView
         android:id="@+id/tv_result"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:background="#333333"
+        android:layout_alignParentStart="true"
         android:paddingBottom="24dp"
         android:paddingLeft="16dp"
         android:paddingRight="16dp"
         android:paddingTop="2dp"
+
         android:textColor="#ffffff"
         android:textSize="18sp"
         tools:text="123" />
@@ -81,6 +210,7 @@
         android:layout_alignParentRight="true"
         android:layout_marginRight="16dp"
         android:src="@android:drawable/ic_menu_edit"
+        android:visibility="gone"
         app:backgroundTint="@color/gray"
         app:elevation="14dp"
         app:fabSize="normal"
@@ -88,7 +218,7 @@
         app:rippleColor="@color/gray" />
 
     <ScrollView
-        android:layout_width="40dp"
+        android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_alignBottom="@+id/fl_content"
         android:background="#454545">
@@ -98,71 +228,89 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingBottom="8dp"
-            android:paddingTop="8dp">
+            android:paddingTop="8dp"
+            android:visibility="gone">
 
             <ImageView
                 android:id="@+id/iv_cube1"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube2"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube3"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube4"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube5"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
+
 
             <ImageView
                 android:id="@+id/iv_cube6"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube7"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube8"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube9"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube10"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube11"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube12"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube13"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube14"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube15"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/iv_cube16"
-                style="@style/cube" />
+                style="@style/cube"
+                android:visibility="invisible" />
         </LinearLayout>
 
     </ScrollView>

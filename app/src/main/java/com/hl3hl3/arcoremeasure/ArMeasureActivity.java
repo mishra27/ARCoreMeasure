@@ -1,19 +1,42 @@
 package com.hl3hl3.arcoremeasure;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
+import android.media.MediaRecorder;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
+import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
-import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.SystemClock;
+import android.provider.Settings;
+import android.support.annotation.NonNull;
 import android.support.design.widget.BaseTransientBottomBar;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.SparseIntArray;
+import android.view.Display;
 import android.view.GestureDetector;
-import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.AdapterView;
@@ -23,6 +46,7 @@ import android.widget.ListView;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ToggleButton;
 
 import com.crashlytics.android.Crashlytics;
 import com.google.ar.core.Anchor;
@@ -44,6 +68,7 @@ import com.google.ar.core.examples.java.helloar.rendering.BackgroundRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.ObjectRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.PlaneRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.PointCloudRenderer;
+import com.google.ar.core.exceptions.CameraNotAvailableException;
 import com.google.ar.core.exceptions.NotTrackingException;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
@@ -52,7 +77,9 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 import com.hl3hl3.arcoremeasure.renderer.RectanglePolygonRenderer;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.concurrent.ArrayBlockingQueue;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -60,12 +87,62 @@ import javax.microedition.khronos.opengles.GL10;
 
 import io.fabric.sdk.android.Fabric;
 
+import static com.hl3hl3.arcoremeasure.Globals.stopPoints;
+
 /**
  * Created by user on 2017/9/25.
  */
 
-public class ArMeasureActivity extends AppCompatActivity {
-    private static final String TAG = ArMeasureActivity.class.getSimpleName();
+
+public class ArMeasureActivity extends AppCompatActivity implements SensorEventListener {
+    //private SensorManager mSensorManager;
+    private final float[] mAccelerometerReading = new float[3];
+    private final float[] mMagnetometerReading = new float[3];
+    private float[] mAccelerometerData = new float[3];
+    private float[] mMagnetometerData = new float[3];
+
+    private TextView mTextSensorAzimuth;
+    private TextView mTextSensorPitch;
+    private TextView mTextSensorRoll;
+    private TextView value_roll8;
+    private TextView value_roll7;
+
+    private TextView click;
+    private Display mDisplay;
+
+    private static final float VALUE_DRIFT = 0.05f;
+
+
+    private final float[] mRotationMatrix = new float[9];
+    private final float[] mOrientationAngles = new float[3];
+
+    private SensorManager sen;
+    Sensor acc;
+    private static final String TAG = "MainActivity";
+    private static final int REQUEST_CODE = 1000;
+    private int mScreenDensity;
+    private MediaProjectionManager mProjectionManager;
+    private static final int DISPLAY_WIDTH = 720;
+    private static final int DISPLAY_HEIGHT = 1280;
+    private MediaProjection mMediaProjection;
+    private VirtualDisplay mVirtualDisplay;
+    private MediaProjectionCallback mMediaProjectionCallback;
+    private ToggleButton mToggleButton;
+    private ToggleButton mToggleButton2;
+
+    private MediaRecorder mMediaRecorder;
+    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+    private static final int REQUEST_PERMISSIONS = 10;
+
+    static {
+        ORIENTATIONS.append(Surface.ROTATION_0, 90);
+        ORIENTATIONS.append(Surface.ROTATION_90, 0);
+        ORIENTATIONS.append(Surface.ROTATION_180, 270);
+        ORIENTATIONS.append(Surface.ROTATION_270, 180);
+    }
+
+
+    private static final String TAG2 = ArMeasureActivity.class.getSimpleName();
     private static final String ASSET_NAME_CUBE_OBJ = "cube.obj";
     private static final String ASSET_NAME_CUBE = "cube_green.png";
     private static final String ASSET_NAME_CUBE_SELECTED = "cube_cyan.png";
@@ -183,12 +260,150 @@ public class ArMeasureActivity extends AppCompatActivity {
         }
     };
 
+    int i = 0;
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+
+        tv_result = findViewById(R.id.tv_result);
+
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            // Do something here...
+                mToggleButton.performClick();
+                x++;
+            Globals.click = true;
+            mTextSensorPitch.setVisibility(View.VISIBLE);
+            mTextSensorRoll.setVisibility(View.VISIBLE);
+            value_roll8.setVisibility(View.VISIBLE);
+            value_roll7.setVisibility(View.VISIBLE);
+
+            if(y > 0){
+                Config config = new Config(session);
+                config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
+                session.configure(config);
+
+            }
+
+
+            return true;
+        }
+
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            // Do something here...
+
+            Config config = new Config(session);
+            config.setPlaneFindingMode(Config.PlaneFindingMode.DISABLED);
+            session.configure(config);
+
+
+
+            mTextSensorPitch.setVisibility(View.INVISIBLE);
+            mTextSensorRoll.setVisibility(View.INVISIBLE);
+            value_roll8.setVisibility(View.INVISIBLE);
+            value_roll7.setVisibility(View.INVISIBLE);
+
+            stopPoints = true;
+
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                public void run() {
+                    mToggleButton2.performClick();
+                }
+            }, 1000);
+
+
+
+
+            // Globals.y++;
+
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+Sensor gyro;
+    Sensor mag;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        sen = (SensorManager)getSystemService(Context.SENSOR_SERVICE);
+
         Fabric.with(this, new Crashlytics());
         setContentView(R.layout.activity_main);
+        DisplayMetrics metrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(metrics);
 
+        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        mDisplay = wm.getDefaultDisplay();
+
+       // mTextSensorAzimuth = (TextView) findViewById(R.id.value_azimuth);
+        mTextSensorPitch = (TextView) findViewById(R.id.value_pitch);
+        mTextSensorRoll = (TextView) findViewById(R.id.value_roll);
+        value_roll8 = (TextView) findViewById(R.id.value_roll8);
+        value_roll7 = (TextView) findViewById(R.id.value_roll7);
+
+
+        click =  (TextView)findViewById(R.id.click);
+        mScreenDensity = metrics.densityDpi;
+
+        mMediaRecorder = new MediaRecorder();
+
+        mProjectionManager = (MediaProjectionManager) getSystemService
+                (Context.MEDIA_PROJECTION_SERVICE);
+
+        mToggleButton = (ToggleButton) findViewById(R.id.toggle);
+        mToggleButton2 = (ToggleButton) findViewById(R.id.toggle2);
+
+        mToggleButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (ContextCompat.checkSelfPermission(ArMeasureActivity.this,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE) + ContextCompat
+                        .checkSelfPermission(ArMeasureActivity.this,
+                                Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    if (ActivityCompat.shouldShowRequestPermissionRationale
+                            (ArMeasureActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) ||
+                            ActivityCompat.shouldShowRequestPermissionRationale
+                                    (ArMeasureActivity.this, Manifest.permission.RECORD_AUDIO)) {
+                        mToggleButton.setChecked(false);
+                        Snackbar.make(findViewById(android.R.id.content), R.string.need_permission,
+                                Snackbar.LENGTH_INDEFINITE).setAction("ENABLE",
+                                new View.OnClickListener() {
+                                    @Override
+                                    public void onClick(View v) {
+                                        ActivityCompat.requestPermissions(ArMeasureActivity.this,
+                                                new String[]{Manifest.permission
+                                                        .WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO},
+                                                REQUEST_PERMISSIONS);
+                                    }
+                                }).show();
+                    } else {
+                        ActivityCompat.requestPermissions(ArMeasureActivity.this,
+                                new String[]{Manifest.permission
+                                        .WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO},
+                                REQUEST_PERMISSIONS);
+                    }
+                } else {
+                    onToggleScreenShare(v);
+                }
+            }
+        });
+
+
+
+        mToggleButton2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                Globals.y++;
+
+                mMediaRecorder.start();
+
+
+            }
+        });
 //        overlayViewForTest = (OverlayView)findViewById(R.id.overlay_for_test);
         tv_result = findViewById(R.id.tv_result);
         fab = findViewById(R.id.fab);
@@ -211,22 +426,22 @@ public class ArMeasureActivity extends AppCompatActivity {
             });
         }
 
-        fab.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                logStatus("click fab");
-                PopupWindow popUp = getPopupWindow();
-//                popUp.showAsDropDown(v, 0, 0); // show popup like dropdown list
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    float screenWidth = getResources().getDisplayMetrics().widthPixels;
-                    float screenHeight = getResources().getDisplayMetrics().heightPixels;
-                    popUp.showAtLocation(v, Gravity.NO_GRAVITY, (int)screenWidth/2, (int)screenHeight/2);
-                } else {
-                    popUp.showAsDropDown(v);
-                }
-            }
-        });
-        fab.hide();
+//        fab.setOnClickListener(new View.OnClickListener(){
+//            @Override
+//            public void onClick(View v) {
+//                logStatus("click fab");
+//                PopupWindow popUp = getPopupWindow();
+////                popUp.showAsDropDown(v, 0, 0); // show popup like dropdown list
+//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//                    float screenWidth = getResources().getDisplayMetrics().widthPixels;
+//                    float screenHeight = getResources().getDisplayMetrics().heightPixels;
+//                    popUp.showAtLocation(v, Gravity.NO_GRAVITY, (int)screenWidth/2, (int)screenHeight/2);
+//                } else {
+//                    popUp.showAsDropDown(v);
+//                }
+//            }
+//        });
+//        fab.hide();
 
 
         displayRotationHelper = new DisplayRotationHelper(/*context=*/ this);
@@ -260,9 +475,21 @@ public class ArMeasureActivity extends AppCompatActivity {
         surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
     }
 
+
     @Override
     protected void onResume() {
         super.onResume();
+
+        acc = sen.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        sen.registerListener(this, acc, SensorManager.SENSOR_DELAY_NORMAL);
+
+        mag = sen.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        sen.registerListener(this, mag, SensorManager.SENSOR_DELAY_NORMAL);
+
+        gyro = sen.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        sen.registerListener(this, gyro, SensorManager.SENSOR_DELAY_NORMAL);
+
+
         logStatus("onResume()");
         if (session == null) {
             Exception exception = null;
@@ -317,7 +544,11 @@ public class ArMeasureActivity extends AppCompatActivity {
 
         showLoadingMessage();
         // Note that order matters - see the note in onPause(), the reverse applies here.
-        session.resume();
+        try {
+            session.resume();
+        } catch (CameraNotAvailableException e) {
+            e.printStackTrace();
+        }
         surfaceView.onResume();
         displayRotationHelper.onResume();
     }
@@ -325,6 +556,7 @@ public class ArMeasureActivity extends AppCompatActivity {
     @Override
     public void onPause() {
         super.onPause();
+        sen.unregisterListener(this);
         logStatus("onPause()");
         if (session != null) {
             // Note that the order matters - GLSurfaceView is paused first so that it does not try
@@ -336,17 +568,17 @@ public class ArMeasureActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
-        logStatus("onRequestPermissionsResult()");
-        Toast.makeText(this, R.string.need_permission, Toast.LENGTH_LONG)
-                .show();
-        if (!CameraPermissionHelper.shouldShowRequestPermissionRationale(this)) {
-            // Permission denied with checking "Do not ask again".
-            CameraPermissionHelper.launchPermissionSettings(this);
-        }
-        finish();
-    }
+//    @Override
+//    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+//        logStatus("onRequestPermissionsResult()");
+//        Toast.makeText(this, R.string.need_permission, Toast.LENGTH_LONG)
+//                .show();
+//        if (!CameraPermissionHelper.shouldShowRequestPermissionRationale(this)) {
+//            // Permission denied with checking "Do not ask again".
+//            CameraPermissionHelper.launchPermissionSettings(this);
+//        }
+//        finish();
+//    }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
@@ -369,11 +601,11 @@ public class ArMeasureActivity extends AppCompatActivity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                messageSnackbar = Snackbar.make(
-                        ArMeasureActivity.this.findViewById(android.R.id.content),
-                        "Searching for surfaces...", Snackbar.LENGTH_INDEFINITE);
-                messageSnackbar.getView().setBackgroundColor(0xbf323232);
-                messageSnackbar.show();
+//                messageSnackbar = Snackbar.make(
+//                        ArMeasureActivity.this.findViewById(android.R.id.content),
+//                        "Searching for surfaces...", Snackbar.LENGTH_INDEFINITE);
+//                messageSnackbar.getView().setBackgroundColor(0xbf323232);
+//                messageSnackbar.show();
             }
         });
     }
@@ -498,6 +730,249 @@ public class ArMeasureActivity extends AppCompatActivity {
         popupWindow.setContentView(listViewSort);
         return popupWindow;
     }
+    int orientation=-1;;
+    private float x = 0, y = 0, z = 0;
+
+    /*
+        array of floats to hold readings of accelerometer and
+        magnetic field sensor
+     */
+    private float[] accelReadings, magReadings;
+
+    double gyroX;
+    double gyroY;
+    double gyroZ;
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+
+
+
+        if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+
+            gyroX = Math.toDegrees(event.values[0]);
+            gyroY = Math.toDegrees(event.values[1]);
+            gyroZ = Math.toDegrees(event.values[2]);
+
+        }
+
+        if(Math.abs(gyroX)< 0.5 &&  Math.abs(gyroY)< 0.5 && Math.abs(gyroZ)< 0.5 ){
+            Globals.isStable = true;
+            Log.d("Sensor Gyrox","PHONE IS STABLE");
+
+        }
+
+        else
+            Globals.isStable = false;
+
+        int sensorType = event.sensor.getType();
+
+        // The sensorEvent object is reused across calls to onSensorChanged().
+        // clone() gets a copy so the data doesn't change out from under us
+        switch (sensorType) {
+            case Sensor.TYPE_ACCELEROMETER:
+                mAccelerometerData = event.values.clone();
+                break;
+            case Sensor.TYPE_MAGNETIC_FIELD:
+                mMagnetometerData = event.values.clone();
+                break;
+            default:
+                return;
+        }
+
+        // Compute the rotation matrix: merges and translates the data
+        // from the accelerometer and magnetometer, in the device coordinate
+        // system, into a matrix in the world's coordinate system.
+        //
+        // The second argument is an inclination matrix, which isn't
+        // used in this example.
+        float[] rotationMatrix = new float[9];
+        boolean rotationOK = SensorManager.getRotationMatrix(rotationMatrix,
+                null, mAccelerometerData, mMagnetometerData);
+
+        // Remap the matrix based on current device/activity rotation.
+        float[] rotationMatrixAdjusted = new float[9];
+        switch (mDisplay.getRotation()) {
+            case Surface.ROTATION_0:
+                rotationMatrixAdjusted = rotationMatrix.clone();
+                break;
+            case Surface.ROTATION_90:
+                SensorManager.remapCoordinateSystem(rotationMatrix,
+                        SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X,
+                        rotationMatrixAdjusted);
+                break;
+            case Surface.ROTATION_180:
+                SensorManager.remapCoordinateSystem(rotationMatrix,
+                        SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y,
+                        rotationMatrixAdjusted);
+                break;
+            case Surface.ROTATION_270:
+                SensorManager.remapCoordinateSystem(rotationMatrix,
+                        SensorManager.AXIS_MINUS_Y, SensorManager.AXIS_X,
+                        rotationMatrixAdjusted);
+                break;
+        }
+
+        // Get the orientation of the device (azimuth, pitch, roll) based
+        // on the rotation matrix. Output units are radians.
+        float orientationValues[] = new float[3];
+        if (rotationOK) {
+            SensorManager.getOrientation(rotationMatrixAdjusted,
+                    orientationValues);
+        }
+
+        // Pull out the individual values from the array.
+        float azimuth = orientationValues[0];
+        float pitch = orientationValues[1];
+        float roll = orientationValues[2];
+
+        // Pitch and roll values that are close to but not 0 cause the
+        // animation to flash a lot. Adjust pitch and roll to 0 for very
+        // small values (as defined by VALUE_DRIFT).
+        if (Math.abs(pitch) < VALUE_DRIFT) {
+            pitch = 0;
+        }
+        if (Math.abs(roll) < VALUE_DRIFT) {
+            roll = 0;
+        }
+
+        // Fill in the string placeholders and set the textview text.
+//        mTextSensorAzimuth.setText( Double.toString(Math.toDegrees(azimuth)));
+
+        double roundOffPitch = Math.round(Math.toDegrees(pitch) * 100.0) / 100.0;
+        double roundOffRoll = Math.round(Math.toDegrees(roll) * 100.0) / 100.0;
+
+
+        mTextSensorPitch.setText(Double.toString(roundOffPitch));
+        mTextSensorRoll.setText(Double.toString(roundOffRoll));
+
+        if(roundOffPitch == 0 && roundOffRoll == 0 && Globals.click == true && Globals.isStable){
+
+            int[] coordinates = new int[2];
+            surfaceView.getLocationOnScreen(coordinates);
+
+// MotionEvent parameters
+            long downTime = SystemClock.uptimeMillis();
+            long eventTime = SystemClock.uptimeMillis();
+            int action = MotionEvent.ACTION_DOWN;
+            int y = surfaceView.getHeight()/2;
+            int x = surfaceView.getWidth()/2;
+            int metaState = 0;
+
+// dispatch the event
+            MotionEvent event1 = MotionEvent.obtain(downTime, eventTime, action, x, y, metaState);
+            surfaceView.dispatchTouchEvent(event1);
+           queuedSingleTaps.offer(event1);
+
+            Globals.click = false;
+
+
+        }
+        // Set spot color (alpha/opacity) equal to pitch/roll.
+        // this is not a precise grade (pitch/roll can be greater than 1)
+        // but it's close enough for the animation effect.
+
+
+
+
+
+
+
+//
+//        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+//            if (event.values[1] < 6.5 && event.values[1] > -6.5) {
+//                if (orientation != 1) {
+//
+//
+//                    if (y == 1) {
+//                        Log.d("Sensor", "Landscape");
+//                        Globals.Rotation = "Landscape";
+//
+//                    }
+//                }
+//                orientation = 1;
+//            } else {
+//                if (orientation != 0) {
+//
+//                    if (y == 1) {
+//                        Globals.Rotation = "Portrait";
+//                        Log.d("Sensor", "Portrait");
+//                    }
+//                }
+//                orientation = 0;
+//            }
+//            float z = event.values[2];
+//        if (z >9 && z < 10)
+//            Log.d("face", "CAMERA DOWN");
+//        else if (z > -10 && z < -9)
+//            Log.d("face", "CAMERA UP");
+//
+//
+//        }
+
+//        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+//            System.arraycopy(event.values, 0, mAccelerometerReading,
+//                    0, mAccelerometerReading.length);
+//        }
+//        else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+//            System.arraycopy(event.values, 0, mMagnetometerReading,
+//                    0, mMagnetometerReading.length);
+//        }
+//
+//        updateOrientationAngles();
+//
+
+//        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+//            accelReadings = event.values;
+//        if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
+//            magReadings = event.values;
+//        if (magReadings != null && accelReadings != null) {
+//            float R[] = new float[9];
+//            float I[] = new float[9];
+//            boolean success = SensorManager.getRotationMatrix(R, I, accelReadings, magReadings);
+//            if (success) {
+//                float orientation[] = new float[3];
+//                SensorManager.getOrientation(R, orientation);
+//                z = (float) Math.toDegrees(orientation[0]);
+//                x = (float) Math.toDegrees(orientation[1]);
+//                y = (float) Math.toDegrees(orientation[2]);
+//
+//                /*
+//                    I want the angles to be shown with respect
+//                    to the positive axis, so I need to do a little math here.
+//
+//                    If the angle is negative, I will take the absolute value of it
+//                    and subtract it from 360. This way, it shows the equivalent angle
+//                    measured
+//                 */
+//                if (x < 0) {
+//                    x = 360 - Math.abs(x);
+//                }
+//
+//                if (y < 0) {
+//                    y = 360 - Math.abs(y);
+//                }
+//
+//                if (z < 0) {
+//                    z = 360 - Math.abs(z);
+//                }
+//
+//                Log.d("Sensor angle", "X " + String.valueOf(x));
+//                Log.d("Sensor angle", "Y " + String.valueOf(y));
+//
+//                Log.d("Sensor angle", "Z " + String.valueOf(z));
+//
+//////            Log.d("Sensor Gyroy", String.valueOf(event.values[0]));
+//////            Log.d("Sensor Gyroz", String.valueOf(event.values[0]));
+//            }
+//        }
+    }
+
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+    }
 
     private class GLSurfaceRenderer implements GLSurfaceView.Renderer{
         private static final String TAG = "GLSurfaceRenderer";
@@ -528,7 +1003,8 @@ public class ArMeasureActivity extends AppCompatActivity {
             // Create the texture and pass it to ARCore session to be filled during update().
             backgroundRenderer.createOnGlThread(context);
             if (session != null) {
-                session.setCameraTextureName(backgroundRenderer.getTextureId());
+
+                    session.setCameraTextureName(backgroundRenderer.getTextureId());
             }
 
             // Prepare the other rendering objects.
@@ -637,12 +1113,14 @@ public class ArMeasureActivity extends AppCompatActivity {
                 Frame frame = session.update();
                 Camera camera = frame.getCamera();
                 // Draw background.
+
                 backgroundRenderer.draw(frame);
 
                 // If not tracking, don't draw 3d objects.
-                if (camera.getTrackingState() == TrackingState.PAUSED) {
+                if (camera.getTrackingState() == TrackingState.PAUSED ) {
                     return;
                 }
+              //  Log.d("CAMERA POSE: " , String.valueOf(camera.getPose().tx()));
 
                 // Get projection matrix.
                 camera.getProjectionMatrix(projmtx, 0, 0.1f, 100.0f);
@@ -656,6 +1134,9 @@ public class ArMeasureActivity extends AppCompatActivity {
                 // Visualize tracked points.
                 PointCloud pointCloud = frame.acquirePointCloud();
                 ArMeasureActivity.this.pointCloud.update(pointCloud);
+
+
+               // if(!stopPoints )
                 ArMeasureActivity.this.pointCloud.draw(viewmtx, projmtx);
 
                 // Application is responsible for releasing the point cloud resources after
@@ -712,6 +1193,9 @@ public class ArMeasureActivity extends AppCompatActivity {
 
                     // show result
                     String result = sb.toString().replaceFirst("[+]", "") + " = " + (((int)(total * 10f))/10f) + "cm";
+                    Globals.results =result;
+
+                    if(x%2 == 0)
                     showResult(result);
                 }
 
@@ -823,10 +1307,10 @@ public class ArMeasureActivity extends AppCompatActivity {
             pose.getRotationQuaternion(mPoseRotation, 0);
             return new Pose(mPoseTranslation, mPoseRotation);
         }
-
         private void setPoseDataToTempArray(Pose pose){
             pose.getTranslation(tempTranslation, 0);
             pose.getRotationQuaternion(tempRotation, 0);
+
         }
 
         private void drawLine(Pose pose0, Pose pose1, float[] viewmtx, float[] projmtx){
@@ -929,7 +1413,7 @@ public class ArMeasureActivity extends AppCompatActivity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    fab.show();
+                  //  fab.show();
                 }
             });
         }
@@ -960,4 +1444,209 @@ public class ArMeasureActivity extends AppCompatActivity {
         }
 
     }
+
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode != REQUEST_CODE) {
+            Log.e(TAG, "Unknown request code: " + requestCode);
+            return;
+        }
+        if (resultCode != RESULT_OK) {
+            Toast.makeText(this,
+                    "Screen Cast Permission Denied", Toast.LENGTH_SHORT).show();
+            mToggleButton.setChecked(false);
+            return;
+        }
+        mMediaProjectionCallback = new MediaProjectionCallback();
+        mMediaProjection = mProjectionManager.getMediaProjection(resultCode, data);
+        mMediaProjection.registerCallback(mMediaProjectionCallback, null);
+        mVirtualDisplay = createVirtualDisplay();
+
+        if (y == 1) {
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                public void run() {
+                    mMediaRecorder.start();
+                }
+            }, 1000);   //5 s
+        }
+    }
+
+    public void onToggleScreenShare(View view) {
+        if (((ToggleButton) view).isChecked()) {
+            initRecorder();
+            shareScreen();
+        } else {
+            y++;
+            mTextSensorPitch.setVisibility(View.INVISIBLE);
+            mMediaRecorder.stop();
+            mMediaRecorder.reset();
+            Log.v(TAG, "Stopping Recording");
+            stopScreenSharing();
+        }
+    }
+
+    private void shareScreen() {
+        if (mMediaProjection == null) {
+            startActivityForResult(mProjectionManager.createScreenCaptureIntent(), REQUEST_CODE);
+            return;
+        }
+        mVirtualDisplay = createVirtualDisplay();
+        Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            public void run() {
+                mMediaRecorder.start();
+            }
+        }, 1000);     }
+
+    private VirtualDisplay createVirtualDisplay() {
+        return mMediaProjection.createVirtualDisplay("MainActivity",
+                DISPLAY_WIDTH, DISPLAY_HEIGHT, mScreenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                mMediaRecorder.getSurface(), null /*Callbacks*/, null
+                /*Handler*/);
+    }
+
+    private void initRecorder() {
+        String time = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+       try {
+           // mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+            mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            mMediaRecorder.setOutputFile(Environment
+                    .getExternalStoragePublicDirectory(Environment
+                            .DIRECTORY_DOWNLOADS) + "/video_" + time +".mp4");
+            mMediaRecorder.setVideoSize(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+            mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+           // mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+            mMediaRecorder.setVideoEncodingBitRate(15000000);
+            mMediaRecorder.setVideoFrameRate(30);
+            int rotation = getWindowManager().getDefaultDisplay().getRotation();
+            int orientation = ORIENTATIONS.get(rotation + 90);
+            mMediaRecorder.setOrientationHint(orientation);
+
+
+
+
+
+
+           mMediaRecorder.prepare();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private class MediaProjectionCallback extends MediaProjection.Callback {
+        @Override
+        public void onStop() {
+            if (mToggleButton.isChecked()) {
+                mToggleButton.setChecked(false);
+                mMediaRecorder.stop();
+                mMediaRecorder.reset();
+                Log.v(TAG, "Recording Stopped");
+                y++;
+                mTextSensorPitch.setVisibility(View.VISIBLE);
+
+
+            }
+            mMediaProjection = null;
+            stopScreenSharing();
+        }
+    }
+
+    private void stopScreenSharing() {
+        if (mVirtualDisplay == null) {
+            return;
+        }
+        mVirtualDisplay.release();
+        //mMediaRecorder.release(); //If used: mMediaRecorder object cannot
+        // be reused again
+        destroyMediaProjection();
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        destroyMediaProjection();
+    }
+
+    private void destroyMediaProjection() {
+        if (mMediaProjection != null) {
+            mMediaProjection.unregisterCallback(mMediaProjectionCallback);
+            mMediaProjection.stop();
+            mMediaProjection = null;
+            y++;
+            mTextSensorPitch.setVisibility(View.VISIBLE);
+
+
+        }
+        Log.i(TAG, "MediaProjection Stopped");
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           @NonNull String permissions[],
+                                           @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_PERMISSIONS: {
+                if ((grantResults.length > 0) && (grantResults[0] +
+                        grantResults[1]) == PackageManager.PERMISSION_GRANTED) {
+                    onToggleScreenShare(mToggleButton);
+                } else {
+                    mToggleButton.setChecked(false);
+                    Snackbar.make(findViewById(android.R.id.content), R.string.need_permission,
+                            Snackbar.LENGTH_INDEFINITE).setAction("ENABLE",
+                            new View.OnClickListener() {
+                                @Override
+                                public void onClick(View v) {
+                                    Intent intent = new Intent();
+                                    intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                                    intent.addCategory(Intent.CATEGORY_DEFAULT);
+                                    intent.setData(Uri.parse("package:" + getPackageName()));
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY);
+                                    intent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+                                    startActivity(intent);
+                                }
+                            }).show();
+                }
+                return;
+            }
+        }
+    }
+
+    public void updateOrientationAngles() {
+        // Update rotation matrix, which is needed to update orientation angles.
+
+        sen.getRotationMatrix(mRotationMatrix, null,
+                mAccelerometerReading, mMagnetometerReading);
+
+        // "mRotationMatrix" now has up-to-date information.
+
+        sen.getOrientation(mRotationMatrix, mOrientationAngles);
+
+        // "mOrientationAngles" now has up-to-date information.
+
+        for(int i =0; i<mOrientationAngles.length; i++ )
+            Log.d("ANGLE", "ANGLEX:" +Math.toDegrees(mOrientationAngles [0]) );
+        Log.d("ANGLE", "ANGLEY:" +Math.toDegrees(mOrientationAngles [0]) );
+
+        Log.d("ANGLE", "ANGLEZ:" +Math.toDegrees(mOrientationAngles [0]) );
+
+    }
+
+
+}
+
+class Globals {
+    public static String results = "";
+    public static int x = 0;
+    public static int y = 0;
+    public static String Rotation = "";
+    public static boolean isStable = false;
+    public static boolean click = false;
+    public static boolean stopPoints = false;
+
+    ///
 }
