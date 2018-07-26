@@ -122,8 +122,8 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
     private static final int REQUEST_CODE = 1000;
     private int mScreenDensity;
     private MediaProjectionManager mProjectionManager;
-    private static final int DISPLAY_WIDTH = 720;
-    private static final int DISPLAY_HEIGHT = 1280;
+    private static int DISPLAY_WIDTH = 0;
+    private static int DISPLAY_HEIGHT = 0;
     private MediaProjection mMediaProjection;
     private VirtualDisplay mVirtualDisplay;
     private MediaProjectionCallback mMediaProjectionCallback;
@@ -336,6 +336,14 @@ Sensor gyro;
 
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         mDisplay = wm.getDefaultDisplay();
+		
+		DisplayMetrics displayMetrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+        int height = displayMetrics.heightPixels;
+        int width = displayMetrics.widthPixels;
+
+        DISPLAY_WIDTH = width;
+        DISPLAY_HEIGHT = height;
 
        // mTextSensorAzimuth = (TextView) findViewById(R.id.value_azimuth);
         mTextSensorPitch = (TextView) findViewById(R.id.value_pitch);
