@@ -31,6 +31,8 @@
         <!-- This tag indicates that this application requires ARCore.  This results in the Google Play
                  Store downloading and installing ARCore along with the application. -->
         <meta-data android:name="com.google.ar.core" android:value="required" />
+        <!--<meta-data android:name="android.max_aspect" android:value="2.1" />-->
+
         <meta-data
             android:name="io.fabric.ApiKey"
             android:value="0b148442de0ebe36c4bf3cd5803e980c9e954a47" />
