@@ -3,6 +3,7 @@ package com.hl3hl3.arcoremeasure;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -17,6 +18,7 @@ import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -34,6 +36,7 @@ import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Display;
 import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -41,6 +44,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.PopupWindow;
@@ -76,6 +80,7 @@ import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
 import com.hl3hl3.arcoremeasure.renderer.RectanglePolygonRenderer;
 
+import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -87,21 +92,18 @@ import javax.microedition.khronos.opengles.GL10;
 
 import io.fabric.sdk.android.Fabric;
 
+import static com.hl3hl3.arcoremeasure.Globals.autoCalculatedDistance;
+import static com.hl3hl3.arcoremeasure.Globals.notRecording;
 import static com.hl3hl3.arcoremeasure.Globals.stopPoints;
 
-/**
- * Created by user on 2017/9/25.
- */
-
-
 public class ArMeasureActivity extends AppCompatActivity implements SensorEventListener {
-    //private SensorManager mSensorManager;
+
+
     private final float[] mAccelerometerReading = new float[3];
     private final float[] mMagnetometerReading = new float[3];
     private float[] mAccelerometerData = new float[3];
     private float[] mMagnetometerData = new float[3];
 
-    private TextView mTextSensorAzimuth;
     private TextView mTextSensorPitch;
     private TextView mTextSensorRoll;
     private TextView value_roll8;
@@ -122,6 +124,8 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
     private static final int REQUEST_CODE = 1000;
     private int mScreenDensity;
     private MediaProjectionManager mProjectionManager;
+
+
     private static int DISPLAY_WIDTH = 0;
     private static int DISPLAY_HEIGHT = 0;
     private MediaProjection mMediaProjection;
@@ -141,8 +145,7 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
 
-
-    private static final String TAG2 = ArMeasureActivity.class.getSimpleName();
+    // The cube created when user keeps the phone stable
     private static final String ASSET_NAME_CUBE_OBJ = "cube.obj";
     private static final String ASSET_NAME_CUBE = "cube_green.png";
     private static final String ASSET_NAME_CUBE_SELECTED = "cube_cyan.png";
@@ -152,10 +155,16 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
     // Rendering. The Renderers are created here, and initialized when the GL surface is created.
     private GLSurfaceView surfaceView = null;
 
+    // For ARCore installation request
     private boolean installRequested;
 
+    // Everything on surfaceView
     private Session session = null;
+
+    // For Click detection
     private GestureDetector gestureDetector;
+
+
     private Snackbar messageSnackbar = null;
     private DisplayRotationHelper displayRotationHelper;
 
@@ -228,6 +237,9 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
 
     //    OverlayView overlayViewForTest;
     private TextView tv_result;
+    private TextView tv_result2;
+
+
     private FloatingActionButton fab;
 
     private GLSurfaceRenderer glSerfaceRenderer = null;
@@ -266,24 +278,33 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
     public boolean onKeyDown(int keyCode, KeyEvent event) {
 
         tv_result = findViewById(R.id.tv_result);
+        tv_result2 = findViewById(R.id.tv_result2);
+
 
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
             // Do something here...
-                mToggleButton.performClick();
-                x++;
+            mToggleButton.performClick();
+            x++;
             Globals.click = true;
             mTextSensorPitch.setVisibility(View.VISIBLE);
             mTextSensorRoll.setVisibility(View.VISIBLE);
             value_roll8.setVisibility(View.VISIBLE);
             value_roll7.setVisibility(View.VISIBLE);
 
+            tv_result2.setVisibility(View.VISIBLE);
+            tv_result.setVisibility(View.VISIBLE);
+
+            Globals.recording = false;
             if(y > 0){
                 Config config = new Config(session);
                 config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL);
                 session.configure(config);
+                Globals.notRecording = true;
+
 
             }
 
+            //camera.getPose().tx();
 
             return true;
         }
@@ -301,8 +322,13 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
             mTextSensorRoll.setVisibility(View.INVISIBLE);
             value_roll8.setVisibility(View.INVISIBLE);
             value_roll7.setVisibility(View.INVISIBLE);
+            tv_result2.setVisibility(View.INVISIBLE);
+            tv_result.setVisibility(View.INVISIBLE);
+
 
             stopPoints = true;
+            Globals.recording = true;
+            Globals.notRecording = false;
 
             Handler handler = new Handler();
             handler.postDelayed(new Runnable() {
@@ -313,7 +339,6 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
 
 
 
-
             // Globals.y++;
 
             return true;
@@ -321,7 +346,7 @@ public class ArMeasureActivity extends AppCompatActivity implements SensorEventL
         return super.onKeyDown(keyCode, event);
     }
 
-Sensor gyro;
+    Sensor gyro;
     Sensor mag;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -336,16 +361,37 @@ Sensor gyro;
 
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         mDisplay = wm.getDefaultDisplay();
-		
-		DisplayMetrics displayMetrics = new DisplayMetrics();
+
+        DisplayMetrics displayMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         int height = displayMetrics.heightPixels;
         int width = displayMetrics.widthPixels;
 
-        DISPLAY_WIDTH = width;
-        DISPLAY_HEIGHT = height;
+//        DISPLAY_WIDTH = surfaceView.getWidth();
+//        DISPLAY_HEIGHT = surfaceView.getHeight();
 
-       // mTextSensorAzimuth = (TextView) findViewById(R.id.value_azimuth);
+//        Button shareAPK = (Button) findViewById(R.id.shareAPK);
+//        shareAPK.setOnClickListener(new View.OnClickListener() {
+//                                        @Override
+//                                        public void onClick(View v) {
+//                                            ApplicationInfo api = getApplicationContext().getApplicationInfo();
+//                                            String apkPath = api.sourceDir;
+//
+//                                            Intent inten = new Intent(Intent.ACTION_SEND);
+//                                            inten.setType("application/vnd.android.package-archive");
+//
+//                                            inten.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(new File(apkPath)));
+//                                            startActivity(Intent.createChooser(inten, "SHARE APP USING"));
+//                                        }
+//
+//                                    });
+
+
+
+
+
+
+        // mTextSensorAzimuth = (TextView) findViewById(R.id.value_azimuth);
         mTextSensorPitch = (TextView) findViewById(R.id.value_pitch);
         mTextSensorRoll = (TextView) findViewById(R.id.value_roll);
         value_roll8 = (TextView) findViewById(R.id.value_roll8);
@@ -414,6 +460,8 @@ Sensor gyro;
         });
 //        overlayViewForTest = (OverlayView)findViewById(R.id.overlay_for_test);
         tv_result = findViewById(R.id.tv_result);
+        tv_result = findViewById(R.id.tv_result2);
+
         fab = findViewById(R.id.fab);
 
         for(int i=0; i<cubeIconIdArray.length; i++){
@@ -434,22 +482,22 @@ Sensor gyro;
             });
         }
 
-//        fab.setOnClickListener(new View.OnClickListener(){
-//            @Override
-//            public void onClick(View v) {
-//                logStatus("click fab");
-//                PopupWindow popUp = getPopupWindow();
-////                popUp.showAsDropDown(v, 0, 0); // show popup like dropdown list
-//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-//                    float screenWidth = getResources().getDisplayMetrics().widthPixels;
-//                    float screenHeight = getResources().getDisplayMetrics().heightPixels;
-//                    popUp.showAtLocation(v, Gravity.NO_GRAVITY, (int)screenWidth/2, (int)screenHeight/2);
-//                } else {
-//                    popUp.showAsDropDown(v);
-//                }
-//            }
-//        });
-//        fab.hide();
+        fab.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View v) {
+                logStatus("click fab");
+                PopupWindow popUp = getPopupWindow();
+//                popUp.showAsDropDown(v, 0, 0); // show popup like dropdown list
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    float screenWidth = getResources().getDisplayMetrics().widthPixels;
+                    float screenHeight = getResources().getDisplayMetrics().heightPixels;
+                    popUp.showAtLocation(v, Gravity.NO_GRAVITY, (int)screenWidth/2, (int)screenHeight/2);
+                } else {
+                    popUp.showAsDropDown(v);
+                }
+            }
+        });
+        fab.hide();
 
 
         displayRotationHelper = new DisplayRotationHelper(/*context=*/ this);
@@ -476,11 +524,15 @@ Sensor gyro;
             }
         });
         glSerfaceRenderer = new GLSurfaceRenderer(this);
+
         surfaceView.setPreserveEGLContextOnPause(true);
         surfaceView.setEGLContextClientVersion(2);
         surfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0); // Alpha used for plane blending.
         surfaceView.setRenderer(glSerfaceRenderer);
         surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+
+
+
     }
 
 
@@ -550,7 +602,6 @@ Sensor gyro;
             setupRenderer();
         }
 
-        showLoadingMessage();
         // Note that order matters - see the note in onPause(), the reverse applies here.
         try {
             session.resume();
@@ -603,31 +654,6 @@ Sensor gyro;
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
-    }
-
-    private void showLoadingMessage() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-//                messageSnackbar = Snackbar.make(
-//                        ArMeasureActivity.this.findViewById(android.R.id.content),
-//                        "Searching for surfaces...", Snackbar.LENGTH_INDEFINITE);
-//                messageSnackbar.getView().setBackgroundColor(0xbf323232);
-//                messageSnackbar.show();
-            }
-        });
-    }
-
-    private void hideLoadingMessage() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if(messageSnackbar != null) {
-                    messageSnackbar.dismiss();
-                }
-                messageSnackbar = null;
-            }
-        });
     }
 
     private void showSnackbarMessage(String message, boolean finishOnDismiss) {
@@ -867,10 +893,11 @@ Sensor gyro;
             int x = surfaceView.getWidth()/2;
             int metaState = 0;
 
+
 // dispatch the event
             MotionEvent event1 = MotionEvent.obtain(downTime, eventTime, action, x, y, metaState);
             surfaceView.dispatchTouchEvent(event1);
-           queuedSingleTaps.offer(event1);
+            queuedSingleTaps.offer(event1);
 
             Globals.click = false;
 
@@ -998,6 +1025,11 @@ Sensor gyro;
         private float[] tempRotation = new float[4];
         private float[] projmtx = new float[16];
         private float[] viewmtx = new float[16];
+        private float[] cameraInitailCoordinates = {0f, 0f, 0f};
+        private float[] cameraFinalCoordinates = {0f, 0f, 0f};
+
+
+
 
         public GLSurfaceRenderer(Context context){
             this.context = context;
@@ -1012,7 +1044,7 @@ Sensor gyro;
             backgroundRenderer.createOnGlThread(context);
             if (session != null) {
 
-                    session.setCameraTextureName(backgroundRenderer.getTextureId());
+                session.setCameraTextureName(backgroundRenderer.getTextureId());
             }
 
             // Prepare the other rendering objects.
@@ -1097,6 +1129,20 @@ Sensor gyro;
             showCubeStatus();
         }
 
+        double initialCameraX = 0.0;
+        double initialCameraY = 0.0;
+        double initialCameraZ = 0.0;
+
+        int onlyOneStartReading = 0;
+
+        double finalCameraX = 0.0;
+        double finalCameraY = 0.0;
+        double finalCameraZ = 0.0;
+
+        int onlyOneStopReading = 0;
+
+
+        int one = 0;
         @Override
         public void onDrawFrame(GL10 gl) {
 //            log(TAG, "onDrawFrame(), mTouches.size=" + mTouches.size());
@@ -1128,7 +1174,51 @@ Sensor gyro;
                 if (camera.getTrackingState() == TrackingState.PAUSED ) {
                     return;
                 }
-              //  Log.d("CAMERA POSE: " , String.valueOf(camera.getPose().tx()));
+
+//
+//                if(notRecording){
+//
+//                }
+
+
+                Log.d("CAMERA POSE: " , String.valueOf(camera.getPose().tx()));
+
+                if(Globals.recording && onlyOneStartReading<1){
+
+                    initialCameraX = camera.getPose().tx();
+                    initialCameraY = camera.getPose().ty();
+                    initialCameraZ = camera.getPose().tz();
+                    onlyOneStartReading++;
+                    Log.d("CAMERA POSE: ", "here1");
+                }
+
+
+                if(notRecording && onlyOneStartReading == 1 && onlyOneStopReading<1){
+
+                    finalCameraX = camera.getPose().tx();
+                    finalCameraY = camera.getPose().ty();
+                    finalCameraZ = camera.getPose().tz();
+                    onlyOneStopReading++;
+                    Log.d("CAMERA POSE: ", "here2");
+
+                }
+
+
+                if(onlyOneStartReading == 1 && onlyOneStopReading ==1 && one <1){
+                    double distance = Math.sqrt(Math.pow((initialCameraX-finalCameraX), 2) +
+                            Math.pow((initialCameraY-finalCameraY), 2) +
+                            Math.pow((initialCameraZ-finalCameraZ), 2));
+
+                    autoCalculatedDistance = Math.round(distance * 100.0) / 100.0;
+
+                    tv_result2.setText("Auto " +Double.toString( autoCalculatedDistance *100 ) );
+                    Log.d("CAMERA POSE: ", "here3");
+                    one++;
+
+                }
+
+
+
 
                 // Get projection matrix.
                 camera.getProjectionMatrix(projmtx, 0, 0.1f, 100.0f);
@@ -1144,23 +1234,12 @@ Sensor gyro;
                 ArMeasureActivity.this.pointCloud.update(pointCloud);
 
 
-               // if(!stopPoints )
+                // if(!stopPoints )
                 ArMeasureActivity.this.pointCloud.draw(viewmtx, projmtx);
 
                 // Application is responsible for releasing the point cloud resources after
                 // using it.
                 pointCloud.release();
-
-                // Check if we detected at least one plane. If so, hide the loading message.
-                if (messageSnackbar != null) {
-                    for (Plane plane : session.getAllTrackables(Plane.class)) {
-                        if (plane.getType() == com.google.ar.core.Plane.Type.HORIZONTAL_UPWARD_FACING &&
-                                plane.getTrackingState() == TrackingState.TRACKING) {
-                            hideLoadingMessage();
-                            break;
-                        }
-                    }
-                }
 
                 // Visualize planes.
                 planeRenderer.drawPlanes(
@@ -1200,11 +1279,11 @@ Sensor gyro;
                     }
 
                     // show result
-                    String result = sb.toString().replaceFirst("[+]", "") + " = " + (((int)(total * 10f))/10f) + "cm";
+                    String result = sb.toString().replaceFirst("[+]", "Dot ") + " = " + (((int)(total * 10f))/10f) + "cm";
                     Globals.results =result;
 
                     if(x%2 == 0)
-                    showResult(result);
+                        showResult(result);
                 }
 
                 // check if there is any touch event
@@ -1216,8 +1295,8 @@ Sensor gyro;
                         // Creates an anchor if a plane or an oriented point was hit.
                         if (trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose())
                                 || (trackable instanceof Point
-                                    && ((Point) trackable).getOrientationMode()
-                                        == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL)) {
+                                && ((Point) trackable).getOrientationMode()
+                                == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL)) {
                             // Cap the number of objects created. This avoids overloading both the
                             // rendering system and ARCore.
                             if (anchors.size() >= 16) {
@@ -1355,7 +1434,7 @@ Sensor gyro;
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        fab.performClick();
+                        //fab.performClick();
                     }
                 });
             }else if(isMVPMatrixHitMotionEvent(renderer.getModelViewProjectionMatrix(), queuedSingleTaps.peek())){
@@ -1414,6 +1493,7 @@ Sensor gyro;
                 public void run() {
                     tv_result.setText(result);
                 }
+
             });
         }
 
@@ -1421,7 +1501,7 @@ Sensor gyro;
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                  //  fab.show();
+                    //  fab.show();
                 }
             });
         }
@@ -1518,8 +1598,19 @@ Sensor gyro;
 
     private void initRecorder() {
         String time = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-       try {
-           // mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        try {
+            // mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+
+            Log.d("WIDTH",         Double.toString(surfaceView.getHeight()));
+            Log.d("WIDTH",         Double.toString(surfaceView.getWidth()));
+            DISPLAY_WIDTH = surfaceView.getWidth();
+            DISPLAY_HEIGHT = surfaceView.getHeight();
+
+//            DISPLAY_WIDTH = 1080;
+//            DISPLAY_HEIGHT = 1920;
+//
+
+
             mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
             mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             mMediaRecorder.setOutputFile(Environment
@@ -1527,7 +1618,7 @@ Sensor gyro;
                             .DIRECTORY_DOWNLOADS) + "/video_" + time +".mp4");
             mMediaRecorder.setVideoSize(DISPLAY_WIDTH, DISPLAY_HEIGHT);
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-           // mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+            // mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
             mMediaRecorder.setVideoEncodingBitRate(15000000);
             mMediaRecorder.setVideoFrameRate(30);
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
@@ -1539,7 +1630,7 @@ Sensor gyro;
 
 
 
-           mMediaRecorder.prepare();
+            mMediaRecorder.prepare();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -1655,6 +1746,14 @@ class Globals {
     public static boolean isStable = false;
     public static boolean click = false;
     public static boolean stopPoints = false;
+    public static boolean notRecording = true;
+    public static boolean recording = false;
+
+    public static int rec = 0;
+
+    public static double autoCalculatedDistance = 0;
+
+
 
     ///
 }
